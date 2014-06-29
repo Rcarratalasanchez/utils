@@ -1,0 +1,683 @@
+############
+# Help me! #
+############
+
+function ayuda()
+{
+echo -e "
+############################################
+##            Helpful commands            ##\n\
+############################################
+
+**************** TOP ********************************
+-> ii: display complete information about the system
+-> hgg: search bash history
+-> lsofg: check ports
+-> cds: change directory and listed
+-> cp_p: Cp with progress bar
+
+**************** Tips ********************************
+bashtips: tips for bash
+cmdfu: examples about the command
+cmdpkg: What package does that command come from?
+
+**************** Utils *******************************
+# del: delete function
+# dirsize: finds directory sizes and lists them
+# lg: identify which group belongs
+# lo: identify which user belongs
+# lm: identify permissions 
+# lls: Counts files, subdirectories and directory size
+# box: create a box of #
+
+**************** Find *******************************
+# ff: find a file under the current directory
+# ffs: whose name starts with a given string
+# ffe: whose name ends with a given string
+
+**************** System ******************************
+# psg: grep running processes
+# psef: grep running processes
+# rtop: display the top cpu processes
+# howru: display how the system are
+# show_tty: show the actual tty
+# system_infos: display detailed info about the system
+
+**************** Network *****************************
+netinfo: shows network information for your system
+myip - finds your current IP to the Internet
+portcheck: check whether or not a port on your box is open
+
+connected: online check
+downfome: check if the url is up or ir just my connection
+
+ippriv: display private IP
+findtcp: find an unused unprivileged TCP port
+clearIptables: clear iptables rules safely
+
+geoip: geoip information
+url-info: show Url information
+
+**************** Backups *****************************
+bak: backup of the file
+backup_bashfiles: backup of bashfiles
+
+**************** Progress visual *********************
+spanner: progress Please wait
+working: progress working
+" | less
+}
+
+##############################################
+##  This software must to be installed for  ##
+##  a correct bashrc display ...            ##
+##############################################
+
+function bashrcinstall()
+{
+sudo apt-get -y install geoip-bin html2text lynx pv gawk
+}
+
+############
+# greeting #
+############
+
+# get current hour (24 clock format i.e. 0-23)
+hour=$(date +"%H")
+# if it is midnight to midafternoon will say G'morning
+if [ $hour -ge 0 -a $hour -lt 12 ]
+then
+  greet="Buenas noches, $USER. Bienvenido de nuevo!"
+# if it is midafternoon to evening ( before 6 pm) will say G'noon
+elif [ $hour -ge 12 -a $hour -lt 18 ]
+then
+  greet="Buenas tardes, $USER. Bienvenido de nuevo!"
+else # it is good evening till midnight
+  greet="Buenos días, $USER. Bienvenido de nuevo!"
+fi
+# display greeting
+echo $greet
+
+##################################################
+# Automatically clean up all temporary files in	 #
+# $HOME directory				                 #
+##################################################
+
+# find "$HOME" -type f \( -name "*~" -or -name ".*~" -or -name "*.old" -or -name "*.bak" -or -name "*.OLD" -or -name "*.BAK" \)|xargs -I{} bash -c "rm -rf \"{}\""
+
+##################################################
+# Network information and IP address stuff	     #
+##################################################
+
+###### netinfo - shows network information for your system
+function netinfo()
+{
+echo "--------------- Network Information ---------------"
+/sbin/ifconfig | awk /'inet addr/ {print $2}'
+/sbin/ifconfig | awk /'Bcast/ {print $3}'
+/sbin/ifconfig | awk /'inet addr/ {print $4}'
+/sbin/ifconfig | awk /'HWaddr/ {print $4,$5}'
+myip=`lynx -dump -hiddenlinks=ignore -nolist http://checkip.dyndns.org:8245/ | sed '/^$/d; s/^[ ]*//g; s/[ ]*$//g' `
+echo "${myip}"
+echo "---------------------------------------------------"
+}
+
+###### myip - finds your current IP if your connected to the internet
+function myip()
+{
+lynx -dump -hiddenlinks=ignore -nolist http://checkip.dyndns.org:8245/ | awk '{ print $4 }' | sed '/^$/d; s/^[ ]*//g; s/[ ]*$//g'
+}
+
+###### clear iptables rules safely
+function cleariptables()
+{
+sudo iptables -P INPUT ACCEPT; sudo iptables -P FORWARD ACCEPT; sudo iptables -P OUTPUT ACCEPT; sudo iptables -F; sudo iptables -X; sudo iptables -L
+}
+
+###### online check
+function connected() { ping -c1 -w2 google.com > /dev/null 2>&1; }
+
+###### find an unused unprivileged TCP port
+function findtcp()
+{
+(netstat  -atn | awk '{printf "%s\n%s\n", $4, $4}' | grep -oE '[0-9]*$'; seq 32768 61000) | sort -n | uniq -u | head -n 1
+}
+
+###### geoip lookup (need geoip database: sudo apt-get install geoip-bin)
+function geoip() {
+geoiplookup $1
+}
+
+###### display private IP
+function ippriv()
+{
+    ifconfig eth0|grep "inet adr"|awk '{print $2}'|awk -F ':' '{print $2}'
+}
+
+###### check whether or not a port on your box is open
+function portcheck() { for i in $@;do curl -s "deluge-torrent.org/test-port.php?port=$i" | sed '/^$/d;s/<br><br>/ /g';done; }
+
+###### show Url information
+# Usage:	url-info "ur"
+
+function url-info()
+{
+doms=$@
+if [ $# -eq 0 ]; then
+echo -e "No domain given\nTry $0 domain.com domain2.org anyotherdomain.net"
+fi
+for i in $doms; do
+_ip=$(host $i|grep 'has address'|awk {'print $4'})
+if [ "$_ip" == "" ]; then
+echo -e "\nERROR: $i DNS error or not a valid domain\n"
+continue
+fi
+ip=`echo ${_ip[*]}|tr " " "|"`
+echo -e "\nInformation for domain: $i [ $ip ]\nQuerying individual IPs"
+ for j in ${_ip[*]}; do
+echo -e "\n$j results:"
+whois $j |egrep -w 'OrgName:|City:|Country:|OriginAS:|NetRange:'
+done
+done
+}
+
+##################################################
+# Common commands piped through grep		     #
+##################################################
+
+# search bash history
+function hgg()
+{
+    if [ $# -lt 1 ] || [ $# -gt 1 ]; then
+        echo "search bash history"
+        echo "usage: mg [search pattern]"
+    else
+        history | grep -i $1 | grep -v hg
+    fi
+}
+
+# grep lsof
+function lsofg()
+{
+    if [ $# -lt 1 ] || [ $# -gt 1 ]; then
+        echo "grep lsof"
+        echo "usage: losfg [port/program/whatever]"
+    else
+        lsof -nPi | grep -i $1 | less
+    fi
+}
+
+# grep running processes
+function psg()
+{
+    if [ $# -lt 1 ] || [ $# -gt 1 ]; then
+        echo "grep running processes"
+        echo "usage: psg [process]"
+    else
+        ps aux | grep USER | grep -v grep
+        ps aux | grep -i $1 | grep -v grep
+    fi
+}
+
+function psef()
+{
+    if [ $# -lt 1 ] || [ $# -gt 1 ]; then
+        echo "grep running processes"
+        echo "usage: psg [process]"
+    else
+        ps -ef | grep USER | grep -v grep
+        ps -ef | grep -i $1 | grep -v grep
+    fi
+}
+
+# display the top cpu processes
+function rtop()
+{
+ps -eo pcpu,pid,user,args | sort -k 1 -r | head -8
+}
+
+# display how the system are
+function howru()
+{
+free -m ; sleep 1
+echo ""
+df -h ; sleep 1
+echo "" 
+rtop
+}
+
+##################################################
+# To show Apt Log History			 #
+##################################################
+
+function apt-history() {
+      case "$1" in
+        install)
+              cat /var/log/dpkg.log | grep 'install '
+              ;;
+        upgrade|remove)
+              cat /var/log/dpkg.log | grep $1
+              ;;
+        rollback)
+              cat /var/log/dpkg.log | grep upgrade | \
+                  grep "$2" -A10000000 | \
+                  grep "$3" -B10000000 | \
+                  awk '{print $4"="$5}'
+              ;;
+        *)
+              cat /var/log/dpkg.log
+              ;;
+      esac
+}
+
+##################################################
+# Backup .bash* files				 #
+##################################################
+
+function backup_bashfiles()
+{
+  ARCHIVE="$HOME/bash_dotfiles_$(date +%Y%m%d_%H%M%S).tar.gz";
+  cd ~
+  tar -czvf $ARCHIVE .bash_profile .bashrc .bash_functions .bash_aliases .bash_prompt
+  echo "All backed up in $ARCHIVE";
+}
+
+##################################################
+# Creates a backup of the file passed as	 #
+# parameter with the date and time		 #
+##################################################
+
+function bak()
+{
+  cp $1 $1_`date +%H:%M:%S_%d-%m-%Y`
+}
+
+##################################################
+# Good bash tips for everyone			 #
+##################################################
+
+function bashtips() {
+cat <<EOF
+DIRECTORIES
+-----------
+~-          Previous working directory
+pushd tmp   Push tmp && cd tmp
+popd        Pop && cd
+GLOBBING AND OUTPUT SUBSTITUTION
+--------------------------------
+ls a[b-dx]e Globs abe, ace, ade, axe
+ls a{c,bl}e Globs ace, able
+\$(ls)      \`ls\` (but nestable!)
+HISTORY MANIPULATION
+--------------------
+!!        Last command
+!?foo     Last command containing \`foo'
+^foo^bar^ Last command containing \`foo', but substitute \`bar'
+!!:0      Last command word
+!!:^      Last command's first argument
+!\$       Last command's last argument
+!!:*      Last command's arguments
+!!:x-y    Arguments x to y of last command
+C-s       search forwards in history
+C-r       search backwards in history
+LINE EDITING
+------------
+M-d     kill to end of word
+C-w     kill to beginning of word
+C-k     kill to end of line
+C-u     kill to beginning of line
+M-r     revert all modifications to current line
+C-]     search forwards in line
+M-C-]   search backwards in line
+C-t     transpose characters
+M-t     transpose words
+M-u     uppercase word
+M-l     lowercase word
+M-c     capitalize word
+COMPLETION
+----------
+M-/     complete filename
+M-~     complete user name
+M-@     complete host name
+M-\$    complete variable name
+M-!     complete command name
+M-^     complete history
+EOF
+}
+
+##################################################
+# Create box of '#' characters around given 	 #
+# string					                     #
+##################################################
+
+function box() { 
+t="$1xxxx";c=${2:-#}; echo ${t//?/$c}; echo "$c $1 $c"; echo ${t//?/$c}; 
+}
+
+##################################################
+# Change directory and list files		 #
+##################################################
+
+function cds() {
+    # only change directory if a directory is specified
+    [ -n "${1}" ] && cd $1
+    ls -la
+}
+
+###### Search commandlinefu.com from the command line using the API
+# Usage: cmdfu hello world
+function cmdfu() { curl "http://www.commandlinefu.com/commands/matching/$@/$(echo -n $@ | openssl base64)/plaintext" --silent | sed "s/\(^#.*\)/\x1b[32m\1\x1b[0m/g" | less -R ; }
+
+##################################################
+# What package does that command come from?	 #
+##################################################
+
+function cmdpkg() { PACKAGE=$(dpkg -S $(which $1) | cut -d':' -f1); echo "[${PACKAGE}]"; dpkg -s "${PACKAGE}" ;}
+
+##################################################
+# Cp with progress bar (using pv)		         #
+##################################################
+
+function cp_p() {
+	if [ `echo "$2" | grep ".*\/$"` ]
+	then
+		pv "$1" > "$2""$1"
+	else
+		pv "$1" > "$2"/"$1"
+	fi
+}
+
+##################################################
+# Delete function				 #
+##################################################
+
+function del()
+{
+    mv "$@" "/${HOME}/.local/share/Trash/files/"
+}
+
+
+##################################################
+# Dirsize - finds directory sizes and lists	 #
+# them for the current directory		 #
+##################################################
+
+function dirsize()
+{
+du -shx * .[a-zA-Z0-9_]* 2> /dev/null | \
+egrep '^ *[0-9.]*[MG]' | sort -n > /tmp/list
+egrep '^ *[0-9.]*M' /tmp/list
+egrep '^ *[0-9.]*G' /tmp/list
+rm /tmp/list
+}
+
+##################################################
+# Site down for everyone or just me?		 #
+##################################################
+
+function downforme() {
+	RED='\e[1;31m'
+	GREEN='\e[1;32m'
+	YELLOW='\e[1;33m'
+	NC='\e[0m'
+	if [ $# = 0 ]
+	then
+		echo -e "${YELLOW}usage:${NC} downforme website_url"
+	else
+		JUSTYOUARRAY=(`lynx -dump http://downforeveryoneorjustme.com/$1 | grep -o "It's just you"`)
+		if [ ${#JUSTYOUARRAY} != 0 ]
+		then
+			echo -e "${RED}It's just you. \n${NC}$1 is up."
+		else
+			echo -e "${GREEN}It's not just you! \n${NC}$1 looks down from here."
+		fi
+	fi
+}
+
+##################################################
+# Find duplicate/non-duplicate lines in series of#
+# files or in stdin				 #
+##################################################
+
+###### find duplicate lines
+function dups() { sort "$@" | uniq -d; }
+
+
+
+###### find duplicate lines, keep just 1 of them, and output to txt file
+function dupscleaner() { sort "$@" | uniq -d > dupscleaned.txt; }
+
+
+
+###### find duplicate lines, remove all non-duplicate lines and output to txt file
+function dupsonly() { sort "$@" | uniq -D > dupsonly.txt; }
+
+
+
+###### find non-duplicate lines
+function nondups() { sort "$@" | uniq -u; }
+
+
+
+###### find duplicate lines, remove all of them, keeping just non-duplicate lines and output to txt file
+function nondupsonly() { sort "$@" | uniq -u > nondupsonly.txt; }
+
+##################################################
+# Find a file(s) ...				 #
+##################################################
+
+###### ... with pattern $1 in name and Execute $2 on it
+function fe() { find . -type f -iname '*'$1'*' -exec "${2:-file}" {} \;  ; }
+
+###### ... under the current directory
+function ff() { /usr/bin/find . -name "$@" ; }
+
+###### ... whose name starts with a given string
+function ffs() { /usr/bin/find . -name "$@"'*' ; }
+
+###### ... whose name ends with a given string
+function ffe() { /usr/bin/find . -name '*'"$@" ; }
+
+##################################################
+# Progress visuals				 				 #
+##################################################
+
+###### please wait...
+function spanner() {
+	PROC=$1;COUNT=0
+	echo -n "Please wait "
+	while [ -d /proc/$PROC ];do
+		while [ "$COUNT" -lt 10 ];do
+			echo -ne '\x08  ' ; sleep 0.1
+			((COUNT++))
+		done
+		until [ "$COUNT" -eq 0 ];do
+			echo -ne '\x08\x08 ' ; sleep 0.1
+			((COUNT -= 1))
+		done
+	done
+}
+
+function working()
+{
+   while [ -d /proc/$1 ]
+   do
+	echo -ne "w      \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "wo     \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "wor    \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "work   \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "worki  \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "workin \b\b\b\b\b\b\b";sleep .08;
+	echo -ne "working\b\b\b\b\b\b\b";sleep .08;
+	echo -ne " orking\b\b\b\b\b\b\b";sleep .08;
+	echo -ne "  rking\b\b\b\b\b\b\b";sleep .08;
+	echo -ne "   king\b\b\b\b\b\b\b";sleep .08;
+	echo -ne "    ing\b\b\b\b\b\b\b";sleep .08;
+	echo -ne "     ng\b\b\b\b\b\b\b";sleep .08;
+	echo -ne "      g\b\b\b\b\b\b\b";sleep .08;
+   done
+}
+
+##################################################
+# Show computer information of all sorts	 #
+# (requires 'gawk': sudo apt-get install gawk)	 #
+##################################################
+
+###### machine details
+function ii()
+{
+    echo -e "\n${RED}You are logged onto:$NC " ; hostname
+    echo -e "\n${RED}Additionnal information:$NC " ; uname -a
+    echo -e "\n${RED}Users logged on:$NC " ; w -h
+    echo -e "\n${RED}Current date:$NC " ; date
+    echo -e "\n${RED}Machine stat:$NC " ; uptime
+    echo -e "\n${RED}Disk space:$NC " ; df -h
+    echo -e "\n${RED}Memory stats (in MB):$NC " ; free -m
+    echo -e "\n${RED}IPs:$NC " ; netinfo
+}
+
+function show_tty()
+{
+	case $1 in
+		*help )
+			echo -e "\n${ewhite}Usage:\n"
+			echo -e "${eorange}show_tty${ewhite}|${egreen} ! no options !\n"
+			tput sgr0
+		;;
+		* )
+			TTY=$(tty)
+			echo ${TTY:5} | sed -e 's/\//\:/g'
+		;;
+	esac
+}
+
+function system_infos()
+{
+	case $1 in
+		*cpu)
+			echo -e "${ewhite}CPU:\n"
+			echo -e "${eorange}Model:${eiceblue} $(grep "model name" /proc/cpuinfo | sed -e 's/.*: //g')"
+			echo -e "${eorange}MHz  :${eiceblue} $(grep "cpu MHz" /proc/cpuinfo | sed -e 's/.*: //g')\n"
+		;;
+		*kernel)
+			echo -e "${ewhite}Kernel:\n"
+			echo -e "${eorange}Release:${eiceblue} $(uname -r)"
+			echo -e "${eorange}Version:${eiceblue} $(uname -v)"
+			echo -e "${eorange}Machine:${eiceblue} $(uname -m)\n"
+		;;
+		*mem | *ram)
+			echo -e "${ewhite}RAM:\n"
+			echo -e "${eorange}Total:${eiceblue} $(((`showmem --free`) + (`showmem --used`))) MB"
+			echo -e "${eorange}Free :${eiceblue} $(showmem --free) MB"
+			echo -e "${eorange}Used :${eiceblue} $(showmem --used) MB\n"
+		;;
+		*partitions)
+			echo -e "${ewhite}Partitions:${eorange}\n"
+			echo -e "major minor blocks device-node ${eiceblue}\
+			\n$(cat /proc/partitions | sed -e '1,2d')" | column -t
+			echo ""
+		;;
+		*pci)
+			check_opt lspci systeminfos::pci
+			if [[ $? != "1" ]]; then
+				echo -e "${ewhite}PCI Devices:\n${eiceblue}"
+				lspci -vkmm
+				echo ""
+			fi
+		;;
+		*usb)
+			check_opt lsusb systeminfos::usb
+			if [[ $? != "1" ]]; then
+				echo -e "${ewhite}USB Devices:\n${eiceblue}"
+				lsusb -v
+				echo ""
+			fi
+		;;
+		*mounts)
+			echo -e "${ewhite}Mounts:\n${eorange}\
+			\ndevice-node on mount-point type filesystem options\n" ${eiceblue} "\n\n$(mount)" | column -t
+			echo ""
+		;;
+		*bios)
+			check_opt dmidecode systeminfos::bios
+			if [[ $? != "1" && $EUID == 0 ]]; then
+				echo -e "${ewhite}SMBIOS/DMI Infos:${eiceblue}\n"
+				dmidecode -q
+			fi
+		;;
+		*all)
+			system_infos_cpu
+			system_infos_kernel
+			system_infos_memory
+			system_infos_partitions
+			# system_infos_pci
+			# system_infos_usb
+			system_infos_mounts
+			# system_infos_bios
+		;;
+		*)
+			echo -e "\n${ewhite}Usage:\n"
+			echo -e "${eorange}system_infos ${ewhite}|${egreen} --cpu\t\t${eiceblue}[Display CPU Model and Freq]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --kernel\t${eiceblue} 	[Display Kernel Version, Release and Machine]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --memory\t${eiceblue} 	[Display Total, Free and Used RAM]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --partitions\t${eiceblue}[Display Major, Minor, Blocks and Node for all Paritions]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --pci\t\t${eiceblue}[Display Infos about all PCI Devices (and their kernel-module)]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --usb\t\t${eiceblue}[Display Infos about all USB Devices (and their kernel-module)]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --bios\t${eiceblue} 	[Display SMBIOS DMI Infos]\
+			\n${eorange}system_infos ${ewhite}|${egreen} --mounts\t${eiceblue} 	[Display all mounted devices]\n"
+			tput sgr0
+		;;
+	esac
+}
+
+function la() {
+	ls -A --group-directories-first "$@"
+}
+
+function lg() {
+	if [[ "$@" == "" ]]; then
+		$@="*"
+	fi
+	ls -l --group-directories-first "$@" | gawk '{print $9, "belongs to Group ->", $4}' | column -t
+}
+
+###### Counts files, subdirectories and directory size and displays details
+# about files depending on the available space
+function lls() {
+	# count files
+	echo -n "<`find . -maxdepth 1 -mindepth 1 -type f | wc -l | tr -d '[:space:]'` files>"
+	# count sub-directories
+	echo -n " <`find . -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d '[:space:]'` dirs/>"
+	# count links
+	echo -n " <`find . -maxdepth 1 -mindepth 1 -type l | wc -l | tr -d '[:space:]'` links@>"
+	# total disk space used by this directory and all subdirectories
+	echo " <~`du -sh . 2> /dev/null | cut -f1`>"
+	ROWS=`stty size | cut -d' ' -f1`
+	FILES=`find . -maxdepth 1 -mindepth 1 |
+	wc -l | tr -d '[:space:]'`
+	# if the terminal has enough lines, do a long listing
+	if [ `expr "${ROWS}" - 6` -lt "${FILES}" ]; then
+		ls
+	else
+		ls -hlAF --full-time
+	fi
+}
+
+function lo() {
+	if [[ "$@" == "" ]]; then
+		$@="*"
+	fi
+	ls -l --group-directories-first "$@" | gawk '{print $9, "belongs to User ->", $3}' | sed -e '1d' | column -t
+}
+
+function lm() {
+	if [[ ! "$@" == "" ]]; then
+		for file in "$@"; do
+			stat -c "%A %a %n" "$file" | gawk '{print "Permissions of:", $3, "->", $1, "("$2")"}'
+		done | column -t
+	fi
+}
+
+function psaux() {
+    [ $# == 1 ] && ps aux | grep $1
+}
